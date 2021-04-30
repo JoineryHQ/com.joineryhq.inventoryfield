@@ -222,6 +222,64 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
       }
     }
   }
+  else if ($formName == 'CRM_Event_Form_Registration_Register') {
+    $inventoryfields = \Civi\Api4\Inventoryfield::get()
+      ->execute();
+
+    foreach ($inventoryfields as $inventoryfield) {
+      $customField = "custom_{$inventoryfield['custom_field_id']}";
+      if ($form->elementExists($customField)) {
+        $disabledOptions = _inventoryfield_getCustomValues($inventoryfield['custom_field_id']);
+        $elField = $form->getElement($customField);
+        $elFieldOptions = & $elField->_options;
+
+        foreach ($elFieldOptions as $key => $elFieldOption) {
+          if (in_array($elFieldOption['text'], $disabledOptions)) {
+            $elFieldOptions[$key]['text'] = $elFieldOption['text'] . '(unavailable)';
+            $elFieldOptions[$key]['attr']['disabled'] = TRUE;
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_civicrm_validateForm().
+ *
+ * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_validateForm/
+ */
+function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$form, &$errors) {
+  if ($formName == 'CRM_Event_Form_Registration_Register') {
+    $inventoryfields = \Civi\Api4\Inventoryfield::get()
+      ->execute();
+
+    foreach ($inventoryfields as $inventoryfield) {
+      $disabledOptions = _inventoryfield_getCustomValues($inventoryfield['custom_field_id']);
+      $customField = "custom_{$inventoryfield['custom_field_id']}";
+      $customFieldValue = $fields[$customField];
+
+      if (in_array($customFieldValue, $disabledOptions)) {
+        $elField = $form->getElement($customField);
+        $elFieldAttr = & $elField->_attributes;
+        $customGroupField = str_replace(':', '.', $elFieldAttr['data-crm-custom']);
+        $participant = \Civi\Api4\Participant::get()
+          ->addWhere($customGroupField, '=', $customFieldValue)
+          ->execute()
+          ->first();
+
+        $displayName = CRM_Contact_BAO_Contact::displayName($participant['contact_id']);
+        $urlParam = "action=view&reset=1&id={$participant['id']}&cid={$participant['contact_id']}&context=home";
+        $participantLink = CRM_Utils_System::url('civicrm/contact/view/participant', $urlParam);
+
+        $errors[$customField] = E::ts("{$elField->_label}: Your selection is already in use by <a href='{$participantLink}' target='_blank'>{$displayName}</a>");
+      }
+
+      return;
+    }
+  }
+
+  return;
 }
 
 /**
@@ -257,4 +315,30 @@ function inventoryfield_civicrm_postProcess($formName, &$form) {
     // $sql = "INSERT INTO `civicrm_meowk` (`text`) VALUES ('$text')";
     // CRM_Core_DAO::executeQuery($sql);
   }
+  else if ($formName == 'CRM_Event_Form_Registration_Confirm') {
+
+  }
+}
+
+function _inventoryfield_getCustomValues($customFieldId) {
+  $customField = \Civi\Api4\CustomField::get()
+    ->addWhere('id', '=', $customFieldId)
+    ->addChain('name_me_0', \Civi\Api4\CustomGroup::get()
+      ->addWhere('id', '=', '$custom_group_id'),
+    0)
+    ->execute()
+    ->first();
+
+  $tableName = $customField['name_me_0']['table_name'];
+
+  $sql = "SELECT * FROM {$tableName}";
+  $results = CRM_Core_DAO::executeQuery($sql);
+
+  $values = [];
+
+  while ($results->fetch()) {
+    $values[] = $results->{$customField['column_name']};
+  }
+
+  return $values;
 }
