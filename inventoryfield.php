@@ -204,6 +204,57 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
       }
       $bhfe[] = 'limit_per';
       $form->assign('beginHookFormElements', $bhfe);
+
+      // Set default values if update page
+      if (!empty($form->_defaultValues['id'])) {
+        $inventoryfields = \Civi\Api4\Inventoryfield::get()
+          ->addWhere('custom_field_id', '=', $form->_defaultValues['id'])
+          ->execute()
+          ->first();
+
+        $defaults = array();
+
+        if ($inventoryfields) {
+          $defaults['limit_per'] = $inventoryfields['limit_per'];
+        }
+
+        $form->setDefaults($defaults);
+      }
     }
+  }
+}
+
+/**
+ * Implements hook_civicrm_postProcess().
+ *
+ * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_postProcess
+ */
+function inventoryfield_civicrm_postProcess($formName, &$form) {
+  if ($formName == 'CRM_Custom_Form_Field' && $form->_submitValues['html_type'] === 'Select') {
+    $inventoryfields = \Civi\Api4\Inventoryfield::get()
+      ->addWhere('custom_field_id', '=', $form->getVar('_id'))
+      ->execute()
+      ->first();
+
+    $limitPer = !empty($form->_submitValues['limit_per']) ? 1 : 0;
+
+    if ($inventoryfields) {
+      $results = \Civi\Api4\Inventoryfield::update()
+        ->addWhere('custom_field_id', '=', $inventoryfields['custom_field_id'])
+        ->addValue('limit_per', $limitPer)
+        ->execute();
+    }
+    else {
+      $results = \Civi\Api4\Inventoryfield::create()
+        ->addValue('custom_field_id', $form->getVar('_id'))
+        ->addValue('limit_per', $limitPer)
+        ->execute();
+    }
+
+    // $text = json_encode($values);
+
+    // // Save to the database autoincfield custom table
+    // $sql = "INSERT INTO `civicrm_meowk` (`text`) VALUES ('$text')";
+    // CRM_Core_DAO::executeQuery($sql);
   }
 }

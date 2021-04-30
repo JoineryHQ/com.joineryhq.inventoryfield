@@ -473,5 +473,11 @@ function _inventoryfield_civix_civicrm_alterSettingsFolders(&$metaDataFolders = 
  * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_entityTypes
  */
 function _inventoryfield_civix_civicrm_entityTypes(&$entityTypes) {
-  $entityTypes = array_merge($entityTypes, []);
+  $entityTypes = array_merge($entityTypes, [
+    'CRM_Inventoryfield_DAO_Inventoryfield' => [
+      'name' => 'Inventoryfield',
+      'class' => 'CRM_Inventoryfield_DAO_Inventoryfield',
+      'table' => 'civicrm_inventoryfield',
+    ],
+  ]);
 }
