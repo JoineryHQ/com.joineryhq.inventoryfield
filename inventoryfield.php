@@ -170,3 +170,40 @@ function inventoryfield_civicrm_themes(&$themes) {
 //  ));
 //  _inventoryfield_civix_navigationMenu($menu);
 //}
+
+/**
+ * Implements hook_civicrm_buildForm().
+ *
+ * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_buildForm
+ */
+function inventoryfield_civicrm_buildForm($formName, &$form) {
+  if ($formName == 'CRM_Custom_Form_Field') {
+    if ($form->elementExists('html_type')) {
+      // Add inventoryfield js
+      CRM_Core_Resources::singleton()->addScriptFile('com.joineryhq.inventoryfield', 'js/CRM_Custom_Form_Field.js', 100, 'page-footer');
+
+      // Create fields that we need to inject
+      $limitPer = [
+        'Do not limit',
+        'Event',
+      ];
+
+      $form->addElement(
+        'select',
+        'limit_per',
+        E::ts('Limit usage of each option per'),
+        ['' => E::ts('- Select -')] + $limitPer,
+        ['class' => 'crm-select2']
+      );
+
+      // Assign bhfe injected fields to the template.
+      $tpl = CRM_Core_Smarty::singleton();
+      $bhfe = $tpl->get_template_vars('beginHookFormElements');
+      if (!$bhfe) {
+        $bhfe = array();
+      }
+      $bhfe[] = 'limit_per';
+      $form->assign('beginHookFormElements', $bhfe);
+    }
+  }
+}
