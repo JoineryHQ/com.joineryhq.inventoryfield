@@ -182,12 +182,12 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
       // Add inventoryfield js
       CRM_Core_Resources::singleton()->addScriptFile('com.joineryhq.inventoryfield', 'js/CRM_Custom_Form_Field.js', 100, 'page-footer');
 
-      // Create fields that we need to inject
+      // Create select field that we need to inject
+      // Value of the field
       $limitPer = [
         'Do not limit',
         'Event',
       ];
-
       $form->addElement(
         'select',
         'limit_per',
@@ -207,35 +207,42 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
 
       // Set default values if update page
       if (!empty($form->_defaultValues['id'])) {
+        // Call inventoryfield api
         $inventoryfields = \Civi\Api4\Inventoryfield::get()
           ->addWhere('custom_field_id', '=', $form->_defaultValues['id'])
           ->execute()
           ->first();
 
         $defaults = array();
-
+        // Set defauts for fields
         if ($inventoryfields) {
           $defaults['limit_per'] = $inventoryfields['limit_per'];
         }
-
         $form->setDefaults($defaults);
       }
     }
   }
   else if ($formName == 'CRM_Event_Form_Registration_Register') {
+    // Call inventoryfield api
     $inventoryfields = \Civi\Api4\Inventoryfield::get()
       ->execute();
 
     foreach ($inventoryfields as $inventoryfield) {
-      $customField = "custom_{$inventoryfield['custom_field_id']}";
-      if ($form->elementExists($customField)) {
-        $disabledOptions = _inventoryfield_getCustomValues($inventoryfield['custom_field_id']);
+      $customFieldId = $inventoryfield['custom_field_id'];
+      $customField = "custom_{$customFieldId}";
+      // Check if custom field is registered in inventoryfield and limit_per is true
+      if ($form->elementExists($customField) && $inventoryfield['limit_per']) {
+        // Get participant details using custom field id
+        $participantDetails = _inventoryfield_getParticipantDetails($customFieldId);
+        // Get custom field details
         $elField = $form->getElement($customField);
         $elFieldOptions = & $elField->_options;
 
+        // Foreach custom field option values
         foreach ($elFieldOptions as $key => $elFieldOption) {
-          if (in_array($elFieldOption['text'], $disabledOptions)) {
-            $elFieldOptions[$key]['text'] = $elFieldOption['text'] . '(unavailable)';
+          // If value exist in $participantDetails array, edit to disable
+          if (!empty($participantDetails[$elFieldOption['text']])) {
+            $elFieldOptions[$key]['text'] = $elFieldOption['text'] . ' (unavailable)';
             $elFieldOptions[$key]['attr']['disabled'] = TRUE;
           }
         }
@@ -251,35 +258,78 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
  */
 function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$form, &$errors) {
   if ($formName == 'CRM_Event_Form_Registration_Register') {
+    // Call inventoryfield api for validation
     $inventoryfields = \Civi\Api4\Inventoryfield::get()
       ->execute();
 
     foreach ($inventoryfields as $inventoryfield) {
-      $disabledOptions = _inventoryfield_getCustomValues($inventoryfield['custom_field_id']);
-      $customField = "custom_{$inventoryfield['custom_field_id']}";
-      $customFieldValue = $fields[$customField];
+      // Re check inventoryfield limit_per
+      if ($inventoryfield['limit_per']) {
+        $customFieldId = $inventoryfield['custom_field_id'];
+        // Get participant details using custom field id
+        $participantDetails = _inventoryfield_getParticipantDetails($customFieldId);
+        $customField = "custom_{$customFieldId}";
+        $customFieldValue = $fields[$customField];
 
-      if (in_array($customFieldValue, $disabledOptions)) {
-        $elField = $form->getElement($customField);
-        $elFieldAttr = & $elField->_attributes;
-        $customGroupField = str_replace(':', '.', $elFieldAttr['data-crm-custom']);
-        $participant = \Civi\Api4\Participant::get()
-          ->addWhere($customGroupField, '=', $customFieldValue)
-          ->execute()
-          ->first();
+        // If value exist in $participantDetails array, return and error
+        if (!empty($participantDetails[$customFieldValue])) {
+          // Get custom field details for the label in error
+          $elField = $form->getElement($customField);
+          // Get contact display name for the error
+          $displayName = CRM_Contact_BAO_Contact::displayName($participantDetails[$customFieldValue]['contact_id']);
+          // Get url param
+          $urlParam = "action=view&reset=1&id={$participantDetails[$customFieldValue]['participant_id']}&cid={$participantDetails[$customFieldValue]['contact_id']}&context=home";
+          // Get participan link with the urlParam
+          $participantLink = CRM_Utils_System::url('civicrm/contact/view/participant', $urlParam);
+          // Add error
+          $errors[$customField] = E::ts("{$elField->_label}: Your selection is already in use by <a href='{$participantLink}' target='_blank'>{$displayName}</a>");
+        }
 
-        $displayName = CRM_Contact_BAO_Contact::displayName($participant['contact_id']);
-        $urlParam = "action=view&reset=1&id={$participant['id']}&cid={$participant['contact_id']}&context=home";
-        $participantLink = CRM_Utils_System::url('civicrm/contact/view/participant', $urlParam);
-
-        $errors[$customField] = E::ts("{$elField->_label}: Your selection is already in use by <a href='{$participantLink}' target='_blank'>{$displayName}</a>");
+        return;
       }
-
-      return;
     }
   }
 
   return;
+}
+
+/**
+ * Get participant details using customfield id
+ *
+ * @param $customFieldId int
+ *
+ * @return array of custom participan details
+ */
+function _inventoryfield_getParticipantDetails($customFieldId) {
+  // Call Participant api using custom_X (X as $customFieldId)
+  $participants = civicrm_api3('Participant', 'get', [
+    'sequential' => 1,
+    'return' => ["custom_{$customFieldId}", "participant_status_id"],
+    "custom_{$customFieldId}" => ['IS NOT NULL' => 1],
+  ]);
+
+  // Initialize details variable as array
+  $details = [];
+  // If there is a $participants, foreach for the details
+  if ($participants) {
+    foreach ($participants['values'] as $participantDetails) {
+      // Check participant status using participant_status_id and make sure is_counted as 1
+      $participantStatusType = civicrm_api3('ParticipantStatusType', 'get', [
+        'sequential' => 1,
+        'id' => $participantDetails['participant_status_id'],
+        'is_counted' => 1,
+      ]);
+
+      // If participantStatusType has a data, it is a counted status and..
+      // get all necessary data from the $participantDetails
+      if ($participantStatusType['count']) {
+        $details[$participantDetails["custom_{$customFieldId}"]]['participant_id'] = $participantDetails['participant_id'];
+        $details[$participantDetails["custom_{$customFieldId}"]]['contact_id'] = $participantDetails['contact_id'];
+      }
+    }
+  }
+
+  return $details;
 }
 
 /**
@@ -289,13 +339,17 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
  */
 function inventoryfield_civicrm_postProcess($formName, &$form) {
   if ($formName == 'CRM_Custom_Form_Field' && $form->_submitValues['html_type'] === 'Select') {
+    // Call Inventoryfield api to make sure it is an edit or creating a new data
     $inventoryfields = \Civi\Api4\Inventoryfield::get()
       ->addWhere('custom_field_id', '=', $form->getVar('_id'))
       ->execute()
       ->first();
 
+    // Set limit_per fields as 0 if it is empty
     $limitPer = !empty($form->_submitValues['limit_per']) ? 1 : 0;
 
+    // If Inventoryfield api has data, update that data..
+    // if not, create a new data
     if ($inventoryfields) {
       $results = \Civi\Api4\Inventoryfield::update()
         ->addWhere('custom_field_id', '=', $inventoryfields['custom_field_id'])
@@ -308,37 +362,5 @@ function inventoryfield_civicrm_postProcess($formName, &$form) {
         ->addValue('limit_per', $limitPer)
         ->execute();
     }
-
-    // $text = json_encode($values);
-
-    // // Save to the database autoincfield custom table
-    // $sql = "INSERT INTO `civicrm_meowk` (`text`) VALUES ('$text')";
-    // CRM_Core_DAO::executeQuery($sql);
   }
-  else if ($formName == 'CRM_Event_Form_Registration_Confirm') {
-
-  }
-}
-
-function _inventoryfield_getCustomValues($customFieldId) {
-  $customField = \Civi\Api4\CustomField::get()
-    ->addWhere('id', '=', $customFieldId)
-    ->addChain('name_me_0', \Civi\Api4\CustomGroup::get()
-      ->addWhere('id', '=', '$custom_group_id'),
-    0)
-    ->execute()
-    ->first();
-
-  $tableName = $customField['name_me_0']['table_name'];
-
-  $sql = "SELECT * FROM {$tableName}";
-  $results = CRM_Core_DAO::executeQuery($sql);
-
-  $values = [];
-
-  while ($results->fetch()) {
-    $values[] = $results->{$customField['column_name']};
-  }
-
-  return $values;
 }
