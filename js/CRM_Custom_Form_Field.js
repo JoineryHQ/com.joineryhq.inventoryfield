@@ -17,7 +17,6 @@ CRM.$(function($) {
       // console.log($('#html_type').val());
       if($('#html_type').val() === 'Select') {
         $limitPerParent.show();
-        console.log($('#html_type').val());
       } else {
         $limitPerParent.hide();
       }

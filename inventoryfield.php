@@ -178,7 +178,13 @@ function inventoryfield_civicrm_themes(&$themes) {
  */
 function inventoryfield_civicrm_buildForm($formName, &$form) {
   if ($formName == 'CRM_Custom_Form_Field') {
-    if ($form->elementExists('html_type')) {
+    $customGroup = \Civi\Api4\CustomGroup::get()
+      ->addSelect('extends')
+      ->addWhere('id', '=', $form->getVar('_gid'))
+      ->execute()
+      ->first();
+
+    if ($form->elementExists('html_type') && $customGroup['extends'] == 'Participant') {
       // Add inventoryfield js
       CRM_Core_Resources::singleton()->addScriptFile('com.joineryhq.inventoryfield', 'js/CRM_Custom_Form_Field.js', 100, 'page-footer');
 
@@ -188,11 +194,12 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
         'Do not limit',
         'Event',
       ];
-      $form->addElement(
+      $form->add(
         'select',
         'limit_per',
         E::ts('Limit usage of each option per'),
-        ['' => E::ts('- Select -')] + $limitPer,
+        $limitPer,
+        TRUE,
         ['class' => 'crm-select2']
       );
 
@@ -249,26 +256,6 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
       }
     }
   }
-  else if ($formName == 'CRM_Event_Form_Participant') {
-    // Call inventoryfield api
-    $inventoryfields = \Civi\Api4\Inventoryfield::get()
-      ->execute();
-
-    foreach ($inventoryfields as $inventoryfield) {
-      $customFieldId = $inventoryfield['custom_field_id'];
-      // Check if custom field is registered in inventoryfield and limit_per is 1
-      if ($inventoryfield['limit_per']) {
-        $participantDetails = _inventoryfield_getParticipantDetails($customFieldId);
-
-        // Store data to pass in the js
-        $participantDetailsList[] = $participantDetails;
-      }
-
-      // Inject data in js
-      CRM_Core_Resources::singleton()->addVars('participantDetails', $participantDetailsList);
-      CRM_Core_Resources::singleton()->addScriptFile('com.joineryhq.inventoryfield', 'js/CRM_Event_Form_Participant.js', 100, 'page-footer');
-    }
-  }
 }
 
 /**
@@ -304,37 +291,6 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
           // Add error
           $errors[$customField] = E::ts("{$elField->_label}: Your selection was just taken by someone else.");
           return;
-        }
-      }
-    }
-  }
-  else if ($formName == 'CRM_Event_Form_Participant') {
-    // Call inventoryfield api for validation
-    $inventoryfields = \Civi\Api4\Inventoryfield::get()
-      ->execute();
-
-    foreach ($inventoryfields as $inventoryfield) {
-      // Re check inventoryfield limit_per
-      if ($inventoryfield['limit_per']) {
-        $customFieldId = $inventoryfield['custom_field_id'];
-        // Get participant details using custom field id
-        $participantDetails = _inventoryfield_getParticipantDetails($customFieldId);
-
-        // Since the field name is not the same as the CRM_Event_Form_Registration_Register,
-        // will just loop and check if the $participantDetails has value
-        foreach ($fields as $field => $value) {
-          if ($participantDetails[$value]) {
-            $elField = $form->getElement($field);
-            // Get contact display name for the error
-            $displayName = CRM_Contact_BAO_Contact::displayName($participantDetails[$value]['contact_id']);
-            // Get url param
-            $urlParam = "action=view&reset=1&id={$participantDetails[$value]['participant_id']}&cid={$participantDetails[$value]['contact_id']}&context=home";
-            // Get participan link with the urlParam
-            $participantLink = CRM_Utils_System::url('civicrm/contact/view/participant', $urlParam);
-            // Add error
-            $errors[$field] = E::ts("{$elField->_label}: Your selection is already in use by <a href='{$participantLink}' target='_blank'>{$displayName}</a>");
-            return;
-          }
         }
       }
     }
@@ -390,7 +346,16 @@ function _inventoryfield_getParticipantDetails($customFieldId) {
  * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_postProcess
  */
 function inventoryfield_civicrm_postProcess($formName, &$form) {
-  if ($formName == 'CRM_Custom_Form_Field' && $form->_submitValues['html_type'] === 'Select') {
+  $customGroup = \Civi\Api4\CustomGroup::get()
+    ->addSelect('extends')
+    ->addWhere('id', '=', $form->getVar('_gid'))
+    ->execute()
+    ->first();
+
+  if ($formName == 'CRM_Custom_Form_Field'
+    && $form->_submitValues['html_type'] === 'Select'
+    && $customGroup['extends'] == 'Participant'
+  ) {
     // Call Inventoryfield api to make sure it is an edit or creating a new data
     $inventoryfields = \Civi\Api4\Inventoryfield::get()
       ->addWhere('custom_field_id', '=', $form->getVar('_id'))
