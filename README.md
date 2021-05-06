@@ -1,15 +1,22 @@
-# Inventory Field
+# CiviCRM Inventory Field
 
 ![Screenshot](/images/screenshot.png)
 
-(*FIXME: In one or two paragraphs, describe what the extension does and why one would download it. *)
+Allows defining a custom 'select' field so that usage of select options is limited to once-per-event.
 
 The extension is licensed under [GPL-3.0](LICENSE.txt).
+
+## Usage
+When editing or creating a custom field which is a) of type "Drop-down (select)" and b) in a Custom Field Group that applies to Participants, set the "Limit usage of each option per" field to "Event".
+
+For fields so configured, this extension will prevent more than one participant per event from selecing any given value in the select options, in on-line registration forms. Once an option has been used by a participant at an event, it will be labeled "Unavailable" and disabled in on-line registration forms for that event.
+
+Note: This setting has no effect on back-office paticipant management forms; therefore, when editing or creating participants through CiviCRM's back-office features, it is still possible to assign the same option to multiple participants.
 
 ## Requirements
 
 * PHP v7.0+
-* CiviCRM (*FIXME: Version number*)
+* CiviCRM >= 5.0
 
 ## Installation (Web UI)
 
