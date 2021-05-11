@@ -180,6 +180,7 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
   // For custom field edit form
   if ($formName == 'CRM_Custom_Form_Field' && $form->elementExists('html_type')) {
     $customGroup = \Civi\Api4\CustomGroup::get()
+      ->setCheckPermissions(FALSE)
       ->addSelect('extends')
       ->addWhere('id', '=', $form->getVar('_gid'))
       ->execute()
@@ -217,6 +218,7 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
       if (!empty($form->_defaultValues['id'])) {
         // Call inventoryfield api
         $inventoryfield = \Civi\Api4\Inventoryfield::get()
+          ->setCheckPermissions(FALSE)
           ->addWhere('custom_field_id', '=', $form->_defaultValues['id'])
           ->execute()
           ->first();
@@ -234,6 +236,7 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
   else if ($formName == 'CRM_Event_Form_Registration_Register') {
     // Call inventoryfield api
     $inventoryfields = \Civi\Api4\Inventoryfield::get()
+      ->setCheckPermissions(FALSE)
       ->execute();
 
     foreach ($inventoryfields as $inventoryfield) {
@@ -269,6 +272,7 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
   if ($formName == 'CRM_Event_Form_Registration_Register') {
     // Call inventoryfield api for validation
     $inventoryfields = \Civi\Api4\Inventoryfield::get()
+      ->setCheckPermissions(FALSE)
       ->execute();
 
     foreach ($inventoryfields as $inventoryfield) {
@@ -340,6 +344,7 @@ function _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId) {
 function inventoryfield_civicrm_postProcess($formName, &$form) {
   if ($formName == 'CRM_Custom_Form_Field' && $form->_submitValues['html_type'] === 'Select') {
     $customGroup = \Civi\Api4\CustomGroup::get()
+      ->setCheckPermissions(FALSE)
       ->addSelect('extends')
       ->addWhere('id', '=', $form->getVar('_gid'))
       ->execute()
@@ -348,6 +353,7 @@ function inventoryfield_civicrm_postProcess($formName, &$form) {
     if ($customGroup['extends'] == 'Participant') {
       // Call Inventoryfield api to make sure it is an edit or creating a new data
       $inventoryfield = \Civi\Api4\Inventoryfield::get()
+        ->setCheckPermissions(FALSE)
         ->addWhere('custom_field_id', '=', $form->getVar('_id'))
         ->execute()
         ->first();
@@ -359,12 +365,14 @@ function inventoryfield_civicrm_postProcess($formName, &$form) {
       // if not, create a new data
       if ($inventoryfield) {
         $results = \Civi\Api4\Inventoryfield::update()
+          ->setCheckPermissions(FALSE)
           ->addWhere('custom_field_id', '=', $inventoryfield['custom_field_id'])
           ->addValue('limit_per', $limitPer)
           ->execute();
       }
       else {
         $results = \Civi\Api4\Inventoryfield::create()
+          ->setCheckPermissions(FALSE)
           ->addValue('custom_field_id', $form->getVar('_id'))
           ->addValue('limit_per', $limitPer)
           ->execute();
