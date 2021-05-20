@@ -245,7 +245,8 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
       // Check if custom field is registered in inventoryfield and limit_per is true
       if ($inventoryfield['limit_per'] && $form->elementExists($customFieldName)) {
         // Get participant details using custom field id
-        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $form->getVar('_id'));
+        $eventId = ($form->getVar('_id') ?? $form->getVar('_eventId'));
+        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId);
         // Get custom field details
         $elField = $form->getElement($customFieldName);
         $elFieldOptions = & $elField->_options;
@@ -318,6 +319,9 @@ function _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId) {
     'api.ParticipantStatusType.get' => [
       'id' => '$value.participant_status_id',
       'is_counted' => 1,
+    ],
+    'options' => [
+      'limit' => 0,
     ],
   ]);
 
