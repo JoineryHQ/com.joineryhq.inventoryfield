@@ -205,6 +205,8 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
         ['class' => 'crm-select2']
       );
 
+      $form->add('text', 'limit_per_amount', ts('Limit usage amount'));
+
       // Assign bhfe injected fields to the template.
       $tpl = CRM_Core_Smarty::singleton();
       $bhfe = $tpl->get_template_vars('beginHookFormElements');
@@ -212,6 +214,7 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
         $bhfe = array();
       }
       $bhfe[] = 'limit_per';
+      $bhfe[] = 'limit_per_amount';
       $form->assign('beginHookFormElements', $bhfe);
 
       // Set default values if update page
@@ -227,6 +230,7 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
         // Set defauts for fields
         if ($inventoryfield) {
           $defaults['limit_per'] = $inventoryfield['limit_per'];
+          $defaults['limit_per_amount'] = $inventoryfield['limit_per_amount'];
         }
         $form->setDefaults($defaults);
       }
@@ -246,7 +250,7 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
       if ($inventoryfield['limit_per'] && $form->elementExists($customFieldName)) {
         // Get participant details using custom field id
         $eventId = ($form->getVar('_id') ?? $form->getVar('_eventId'));
-        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId);
+        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId, $inventoryfield['limit_per_amount']);
         // Get custom field details
         $elField = $form->getElement($customFieldName);
         $elFieldOptions = & $elField->_options;
@@ -281,7 +285,7 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
       if ($inventoryfield['limit_per']) {
         $customFieldId = $inventoryfield['custom_field_id'];
         // Get participant details using custom field id
-        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $form->getVar('_id'));
+        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $form->getVar('_id'), $inventoryfield['limit_per_amount']);
         $customFieldName = "custom_{$customFieldId}";
         $customFieldValue = $fields[$customFieldName];
 
@@ -296,6 +300,26 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
       }
     }
   }
+  else if ($formName == 'CRM_Custom_Form_Field') {
+    $fieldLimitPerAmount = $fields['limit_per_amount'];
+
+    if (!empty($fieldLimitPerAmount)) {
+      if (!is_numeric($fieldLimitPerAmount)) {
+        $errors['limit_per_amount'] = E::ts('Limit usage amount field should only have numeric value.');
+        return;
+      }
+
+      if (floor($fieldLimitPerAmount) != $fieldLimitPerAmount) {
+        $errors['limit_per_amount'] = E::ts('Limit usage amount field should not be a decimal.');
+        return;
+      }
+
+      if ($fieldLimitPerAmount < 1) {
+        $errors['limit_per_amount'] = E::ts('Limit usage amount field should not be below 1.');
+        return;
+      }
+    }
+  }
 
   return;
 }
@@ -305,10 +329,11 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
  *
  * @param $customFieldId int
  * @param $eventId int
+ * @param $limitPerAmount int
  *
  * @return array of custom participant details
  */
-function _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId) {
+function _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId, $limitPerAmount) {
   // Call Participant api using custom_X (X as $customFieldId) and event_id
   // with participantStatusType.get api
   $participants = civicrm_api3('Participant', 'get', [
@@ -329,10 +354,21 @@ function _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId) {
   $details = [];
   // If there is a $participants, foreach for the details
   if ($participants) {
+    $getCustomValues = [];
     foreach ($participants['values'] as $participantDetails) {
-      // If participantStatusType has a data, it is a counted status
+      // If participantStatusType has a data, it is a counted status and store it on getCustomValues
       if ($participantDetails['api.ParticipantStatusType.get']['count']) {
-        $details[$participantDetails["custom_{$customFieldId}"]] = $participantDetails["custom_{$customFieldId}"];
+        $getCustomValues[] = $participantDetails["custom_{$customFieldId}"];
+      }
+    }
+
+    // Count all values of getCustomValues
+    $countCustomValues = array_count_values($getCustomValues);
+    foreach ($countCustomValues as $customValue => $customValueCount) {
+      // If customValueCount greater thatn or equals to limitPerAmount..
+      // it needs to be removed
+      if ($customValueCount >= $limitPerAmount) {
+        $details[$customValue] = $customValue;
       }
     }
   }
@@ -364,6 +400,7 @@ function inventoryfield_civicrm_postProcess($formName, &$form) {
 
       // Set limit_per fields as 0 if it is empty
       $limitPer = !empty($form->_submitValues['limit_per']) ? 1 : 0;
+      $limitPerAmount = empty($form->_submitValues['limit_per_amount']) ? 1 : $form->_submitValues['limit_per_amount'];
 
       // If Inventoryfield api has data, update that data..
       // if not, create a new data
@@ -372,6 +409,7 @@ function inventoryfield_civicrm_postProcess($formName, &$form) {
           ->setCheckPermissions(FALSE)
           ->addWhere('custom_field_id', '=', $inventoryfield['custom_field_id'])
           ->addValue('limit_per', $limitPer)
+          ->addValue('limit_per_amount', $limitPerAmount)
           ->execute();
       }
       else {
@@ -379,6 +417,7 @@ function inventoryfield_civicrm_postProcess($formName, &$form) {
           ->setCheckPermissions(FALSE)
           ->addValue('custom_field_id', $form->getVar('_id'))
           ->addValue('limit_per', $limitPer)
+          ->addValue('limit_per_amount', $limitPerAmount)
           ->execute();
       }
     }
