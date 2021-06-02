@@ -4,7 +4,7 @@ CRM.$(function($) {
     var limitPer = $('#limit_per');
     var limitPerParent = limitPer.parents('tr');
     limitPerParent.addClass('crm-custom-field-form-block-min_value limit_per').hide();
-    limitPerParent.insertAfter('.crm-custom-field-form-block-is_view');
+    limitPerParent.insertAfter('.crm-custom-field-form-block-is_view, .crm-price-field-form-block-is_active');
 
     if($('#html_type').val() === 'Select') {
       limitPerParent.show();

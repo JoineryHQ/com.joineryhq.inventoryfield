@@ -50,12 +50,13 @@ CREATE TABLE `civicrm_inventoryfield` (
 
      `id` int unsigned NOT NULL AUTO_INCREMENT  COMMENT 'Unique Inventoryfield ID',
      `custom_field_id` int unsigned    COMMENT 'FK to civicrm_custom_field.id',
+     `price_field_id` int unsigned    COMMENT 'FK to civicrm_price_field.id',
      `limit_per` int unsigned   DEFAULT 0  
 ,
         PRIMARY KEY (`id`)
  
  
-,          CONSTRAINT FK_civicrm_inventoryfield_custom_field_id FOREIGN KEY (`custom_field_id`) REFERENCES `civicrm_custom_field`(`id`) ON DELETE CASCADE  
+,          CONSTRAINT FK_civicrm_inventoryfield_custom_field_id FOREIGN KEY (`custom_field_id`) REFERENCES `civicrm_custom_field`(`id`) ON DELETE CASCADE,          CONSTRAINT FK_civicrm_inventoryfield_price_field_id FOREIGN KEY (`price_field_id`) REFERENCES `civicrm_price_field`(`id`) ON DELETE CASCADE  
 )    ;
 
  
