@@ -214,7 +214,7 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
     }
 
     // Add inventoryfield js
-    CRM_Core_Resources::singleton()->addScriptFile('com.joineryhq.inventoryfield', 'js/CRM_Custom_Form_Field.js', 100, 'page-footer');
+    CRM_Core_Resources::singleton()->addScriptFile('com.joineryhq.inventoryfield', 'js/CRM_Custom-Price_Form_Field.js', 100, 'page-footer');
 
     // Create select field that we need to inject
     // Value of the field
@@ -265,15 +265,17 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
       ->execute();
 
     foreach ($inventoryfields as $inventoryfield) {
-      $customFieldId = $inventoryfield['custom_field_id'];
-      $customFieldName = "custom_{$customFieldId}";
+      $fieldType = $inventoryfield['custom_field_id'] ? 'custom' : 'price';
+      $fieldId = $inventoryfield['custom_field_id'] ?? $inventoryfield['price_field_id'];
+      $fieldName = "{$fieldType}_{$fieldId}";
+
       // Check if custom field is registered in inventoryfield and limit_per is true
-      if ($inventoryfield['limit_per'] && $form->elementExists($customFieldName)) {
-        // Get participant details using custom field id
+      if ($inventoryfield['limit_per'] && $form->elementExists($fieldName)) {
         $eventId = ($form->getVar('_id') ?? $form->getVar('_eventId'));
-        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId);
+        // Get participant details using custom field id
+        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($fieldType, $fieldId, $eventId);
         // Get custom field details
-        $elField = $form->getElement($customFieldName);
+        $elField = $form->getElement($fieldName);
         $elFieldOptions = & $elField->_options;
 
         // Foreach custom field option values
@@ -304,18 +306,19 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
     foreach ($inventoryfields as $inventoryfield) {
       // Re check inventoryfield limit_per
       if ($inventoryfield['limit_per']) {
-        $customFieldId = $inventoryfield['custom_field_id'];
+        $fieldType = $inventoryfield['custom_field_id'] ? 'custom' : 'price';
+        $fieldId = $inventoryfield['custom_field_id'] ?? $inventoryfield['price_field_id'];
         // Get participant details using custom field id
-        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $form->getVar('_id'));
-        $customFieldName = "custom_{$customFieldId}";
-        $customFieldValue = $fields[$customFieldName];
+        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($fieldType, $fieldId, $form->getVar('_id'));
+        $fieldName = "{$fieldType}_{$fieldId}";
+        $fieldValue = $fields[$fieldName];
 
         // If value exist in $fieldUsedOptionsPerEvent array, return and error
-        if (!empty($fieldUsedOptionsPerEvent[$customFieldValue])) {
+        if (!empty($fieldUsedOptionsPerEvent[$fieldValue])) {
           // Get custom field details for the label in error
-          $elField = $form->getElement($customFieldName);
+          $elField = $form->getElement($fieldName);
           // Add error
-          $errors[$customFieldName] = E::ts("{$elField->_label}: Your selection was just taken by someone else.");
+          $errors[$fieldName] = E::ts("{$elField->_label}: Your selection was just taken by someone else.");
           return;
         }
       }
@@ -326,38 +329,71 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
 }
 
 /**
- * Get participant details using customfield id and event id
+ * Get participant details using fieldType and field id of either price field or custom field, and event id
  *
- * @param $customFieldId int
+ * @param $fieldType string
+ * @param $fieldId int
  * @param $eventId int
  *
  * @return array of custom participant details
  */
-function _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId) {
-  // Call Participant api using custom_X (X as $customFieldId) and event_id
-  // with participantStatusType.get api
-  $participants = civicrm_api3('Participant', 'get', [
-    'sequential' => 1,
-    'return' => ["custom_{$customFieldId}", 'participant_status_id'],
-    "custom_{$customFieldId}" => ['IS NOT NULL' => 1],
-    'event_id' => $eventId,
-    'api.ParticipantStatusType.get' => [
-      'id' => '$value.participant_status_id',
-      'is_counted' => 1,
-    ],
-    'options' => [
-      'limit' => 0,
-    ],
-  ]);
-
+function _inventoryfield_getFieldUsedOptionsPerEvent($fieldType, $fieldId, $eventId) {
   // Initialize details variable as array
   $details = [];
-  // If there is a $participants, foreach for the details
-  if ($participants) {
-    foreach ($participants['values'] as $participantDetails) {
-      // If participantStatusType has a data, it is a counted status
-      if ($participantDetails['api.ParticipantStatusType.get']['count']) {
-        $details[$participantDetails["custom_{$customFieldId}"]] = $participantDetails["custom_{$customFieldId}"];
+
+  if ($fieldType == 'custom') {
+    // Call Participant api using custom_X (X as $fieldId) and event_id
+    // with participantStatusType.get api
+    $participants = civicrm_api3('Participant', 'get', [
+      'sequential' => 1,
+      'return' => ["custom_{$fieldId}", 'participant_status_id'],
+      "custom_{$fieldId}" => ['IS NOT NULL' => 1],
+      'event_id' => $eventId,
+      'api.ParticipantStatusType.get' => [
+        'id' => '$value.participant_status_id',
+        'is_counted' => 1,
+      ],
+      'options' => [
+        'limit' => 0,
+      ],
+    ]);
+
+    // If there is a $participants, foreach for the details
+    if ($participants) {
+      foreach ($participants['values'] as $participantDetails) {
+        // If participantStatusType has a data, it is a counted status
+        if ($participantDetails['api.ParticipantStatusType.get']['count']) {
+          $details[$participantDetails["custom_{$fieldId}"]] = $participantDetails["custom_{$fieldId}"];
+        }
+      }
+    }
+  }
+  else if ($fieldType == 'price') {
+    // Call LineItem api using price_field_id as $fieldId
+    // with Participant.get api called using $value.entity_id and event_id
+    // lastly with participantStatusType.get api
+    $priceFieldParticipant = civicrm_api3('LineItem', 'get', [
+      'sequential' => 1,
+      'return' => ['price_field_value_id', 'entity_id'],
+      'price_field_id' => $fieldId,
+      'api.Participant.get' => [
+        'return' => ['participant_status_id'],
+        'id' => '$value.entity_id',
+        'event_id' => $eventId,
+        'api.ParticipantStatusType.get' => [
+          'id' => '$value.participant_status_id',
+          'is_counted' => 1,
+        ],
+      ],
+    ]);
+
+    // If there is a $priceFieldParticipant, foreach for the details
+    if ($priceFieldParticipant) {
+      foreach ($priceFieldParticipant['values'] as $participantDetails) {
+        // If participantStatusType has a data, it is a counted status
+        if ($participantDetails['api.Participant.get']['values'][0]['api.ParticipantStatusType.get']['count']) {
+          $details[$participantDetails['price_field_value_id']] = $participantDetails['price_field_value_id'];
+        }
       }
     }
   }
@@ -376,6 +412,7 @@ function inventoryfield_civicrm_postProcess($formName, &$form) {
     && $form->_submitValues['html_type'] === 'Select'
   ) {
     $inventoryfieldColumn = '';
+    // If _gid, set inventoryfieldColumn as custom_field_id
     if ($form->getVar('_gid')) {
       $customGroup = \Civi\Api4\CustomGroup::get()
         ->setCheckPermissions(FALSE)
@@ -390,6 +427,7 @@ function inventoryfield_civicrm_postProcess($formName, &$form) {
 
       $inventoryfieldColumn = 'custom_field_id';
     }
+    // If _sid, set inventoryfieldColumn as price_field_id
     else if ($form->getVar('_sid')) {
       $priceSets = \Civi\Api4\PriceSet::get()
         ->setCheckPermissions(FALSE)
