@@ -50,7 +50,8 @@ CREATE TABLE `civicrm_inventoryfield` (
 
      `id` int unsigned NOT NULL AUTO_INCREMENT  COMMENT 'Unique Inventoryfield ID',
      `custom_field_id` int unsigned    COMMENT 'FK to civicrm_custom_field.id',
-     `limit_per` int unsigned   DEFAULT 0  
+     `limit_per` int unsigned   DEFAULT 0 ,
+     `limit_per_amount` int unsigned   DEFAULT 1  
 ,
         PRIMARY KEY (`id`)
  
