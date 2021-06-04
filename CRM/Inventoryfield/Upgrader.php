@@ -56,17 +56,16 @@ class CRM_Inventoryfield_Upgrader extends CRM_Inventoryfield_Upgrader_Base {
   // }
 
   /**
-   * Example: Run a couple simple queries.
+   * Add column civicrm_inventoryfield.limit_per_amount
    *
    * @return TRUE on success
    * @throws Exception
    */
-  // public function upgrade_4200() {
-  //   $this->ctx->log->info('Applying update 4200');
-  //   CRM_Core_DAO::executeQuery('UPDATE foo SET bar = "whiz"');
-  //   CRM_Core_DAO::executeQuery('DELETE FROM bang WHERE willy = wonka(2)');
-  //   return TRUE;
-  // }
+   public function upgrade_4200() {
+     $this->ctx->log->info('Applying update 4200: Add column civicrm_inventoryfield.limit_per_amount');
+     CRM_Core_DAO::executeQuery('alter table civicrm_inventoryfield add  column `limit_per_amount` int unsigned   DEFAULT 1;');
+     return TRUE;
+   }
 
 
   /**
