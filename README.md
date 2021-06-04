@@ -9,6 +9,8 @@ The extension is licensed under [GPL-3.0](LICENSE.txt).
 ## Usage
 When editing or creating a custom field which is a) of type "Drop-down (select)" and b) in a Custom Field Group that applies to Participants, set the "Limit usage of each option per" field to "Event".
 
+You may then optionally set the "Limit usage count" setting to any positive integer (default is 1), to limit the usages per event to that amount.
+
 For fields so configured, this extension will prevent more than one participant per event from selecing any given value in the select options, in on-line registration forms. Once an option has been used by a participant at an event, it will be labeled "Unavailable" and disabled in on-line registration forms for that event.
 
 Note: This setting has no effect on back-office paticipant management forms; therefore, when editing or creating participants through CiviCRM's back-office features, it is still possible to assign the same option to multiple participants.
