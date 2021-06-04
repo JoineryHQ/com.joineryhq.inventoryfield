@@ -205,7 +205,7 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
         ['class' => 'crm-select2']
       );
 
-      $form->add('text', 'limit_per_amount', ts('Limit usage amount'));
+      $form->add('text', 'limit_per_amount', E::ts('Limit usage count'));
 
       // Assign bhfe injected fields to the template.
       $tpl = CRM_Core_Smarty::singleton();
@@ -217,7 +217,11 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
       $bhfe[] = 'limit_per_amount';
       $form->assign('beginHookFormElements', $bhfe);
 
-      // Set default values if update page
+      // Set default values for new fields.
+      $defaults = array();
+      $defaults['limit_per'] = 0;
+      $defaults['limit_per_amount'] = 1;
+      // If editing an existing field, amend those default values.
       if (!empty($form->_defaultValues['id'])) {
         // Call inventoryfield api
         $inventoryfield = \Civi\Api4\Inventoryfield::get()
@@ -226,14 +230,13 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
           ->execute()
           ->first();
 
-        $defaults = array();
         // Set defauts for fields
         if ($inventoryfield) {
           $defaults['limit_per'] = $inventoryfield['limit_per'];
           $defaults['limit_per_amount'] = $inventoryfield['limit_per_amount'];
         }
-        $form->setDefaults($defaults);
       }
+      $form->setDefaults($defaults);
     }
   }
   // For online registration form
@@ -301,22 +304,14 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
     }
   }
   else if ($formName == 'CRM_Custom_Form_Field') {
-    $fieldLimitPerAmount = $fields['limit_per_amount'];
-
-    if (!empty($fieldLimitPerAmount)) {
-      if (!is_numeric($fieldLimitPerAmount)) {
-        $errors['limit_per_amount'] = E::ts('Limit usage amount field should only have numeric value.');
-        return;
-      }
-
-      if (floor($fieldLimitPerAmount) != $fieldLimitPerAmount) {
-        $errors['limit_per_amount'] = E::ts('Limit usage amount field should not be a decimal.');
-        return;
-      }
-
-      if ($fieldLimitPerAmount < 1) {
-        $errors['limit_per_amount'] = E::ts('Limit usage amount field should not be below 1.');
-        return;
+    // Validate limit_per_amount if limit_per is set.
+    if($fields['limit_per']) {
+      $fieldLimitPerAmount = $fields['limit_per_amount'];
+      if (
+        !(ctype_digit($fieldLimitPerAmount) && !is_int($fieldLimitPerAmount))
+        || (int)$fieldLimitPerAmount <= 0
+      ) {
+        $errors['limit_per_amount'] = E::ts('This field must be a positive integer.');
       }
     }
   }
@@ -400,7 +395,6 @@ function inventoryfield_civicrm_postProcess($formName, &$form) {
 
       // Set limit_per fields as 0 if it is empty
       $limitPer = !empty($form->_submitValues['limit_per']) ? 1 : 0;
-      $limitPerAmount = empty($form->_submitValues['limit_per_amount']) ? 1 : $form->_submitValues['limit_per_amount'];
 
       // If Inventoryfield api has data, update that data..
       // if not, create a new data
@@ -409,7 +403,7 @@ function inventoryfield_civicrm_postProcess($formName, &$form) {
           ->setCheckPermissions(FALSE)
           ->addWhere('custom_field_id', '=', $inventoryfield['custom_field_id'])
           ->addValue('limit_per', $limitPer)
-          ->addValue('limit_per_amount', $limitPerAmount)
+          ->addValue('limit_per_amount', $form->_submitValues['limit_per_amount'])
           ->execute();
       }
       else {
