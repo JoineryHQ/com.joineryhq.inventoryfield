@@ -70,9 +70,8 @@ class CRM_Inventoryfield_Upgrader extends CRM_Inventoryfield_Upgrader_Base {
 
   public function upgrade_4201() {
     $this->ctx->log->info('Applying update 4201: Add column civicrm_inventoryfield.price_field_id');
-    $query = "ALTER TABLE civicrm_inventoryfield ADD COLUMN `price_field_id` int unsigned COMMENT 'FK to civicrm_price_field.id';
-      ALTER TABLE civicrm_inventoryfield ADD CONSTRAINT FK_civicrm_inventoryfield_price_field_id FOREIGN KEY (`price_field_id`) REFERENCES `civicrm_price_field`(`id`) ON DELETE CASCADE;";
-    CRM_Core_DAO::executeQuery($query);
+    CRM_Core_DAO::executeQuery("ALTER TABLE civicrm_inventoryfield ADD COLUMN `price_field_id` int unsigned COMMENT 'FK to civicrm_price_field.id';");
+    CRM_Core_DAO::executeQuery("ALTER TABLE civicrm_inventoryfield ADD CONSTRAINT FK_civicrm_inventoryfield_price_field_id FOREIGN KEY (`price_field_id`) REFERENCES `civicrm_price_field`(`id`) ON DELETE CASCADE;");
     return TRUE;
   }
 
