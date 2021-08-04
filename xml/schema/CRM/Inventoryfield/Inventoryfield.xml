@@ -48,4 +48,10 @@
     <default>0</default>
   </field>
 
+  <field>
+    <name>limit_per_amount</name>
+    <type>int unsigned</type>
+    <default>1</default>
+  </field>
+
 </table>
