@@ -183,7 +183,6 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
     && $form->elementExists('html_type')
   ) {
     $inventoryfieldColumn = '';
-    $inventoryfieldColumnValue = NULL;
     if ($form->getVar('_gid')) {
       $customGroup = \Civi\Api4\CustomGroup::get()
         ->setCheckPermissions(FALSE)
@@ -366,58 +365,61 @@ function _inventoryfield_getFieldUsedOptionsPerEvent($fieldType, $fieldId, $even
   $details = [];
   $values = [];
 
-  if ($fieldType == 'custom') {
-    // Call Participant api using custom_X (X as $fieldId) and event_id
-    // with participantStatusType.get api
-    $participants = civicrm_api3('Participant', 'get', [
-      'sequential' => 1,
-      'return' => ["custom_{$fieldId}", 'participant_status_id'],
-      "custom_{$fieldId}" => ['IS NOT NULL' => 1],
-      'event_id' => $eventId,
-      'api.ParticipantStatusType.get' => [
-        'id' => '$value.participant_status_id',
-        'is_counted' => 1,
-      ],
-      'options' => [
-        'limit' => 0,
-      ],
-    ]);
-
-    // If there is a $participants, foreach for the details
-    if ($participants) {
-      foreach ($participants['values'] as $participantDetails) {
-        // If participantStatusType has a data, it is a counted status and store it on getCustomValues
-        if ($participantDetails['api.ParticipantStatusType.get']['count']) {
-          $values[] = $participantDetails["custom_{$fieldId}"];
-        }
-      }
-    }
-  }
-  else if ($fieldType == 'price') {
-    // Call LineItem api using price_field_id as $fieldId
-    // with Participant.get api called using $value.entity_id and event_id
-    // lastly with participantStatusType.get api
-    $priceFieldParticipant = civicrm_api3('LineItem', 'get', [
-      'sequential' => 1,
-      'return' => ['price_field_value_id', 'entity_id'],
-      'price_field_id' => $fieldId,
-      'api.Participant.get' => [
-        'return' => ['participant_status_id'],
-        'id' => '$value.entity_id',
+  // only get the details if there is an eventId
+  if ($eventId) {
+    if ($fieldType == 'custom') {
+      // Call Participant api using custom_X (X as $fieldId) and event_id
+      // with participantStatusType.get api
+      $participants = civicrm_api3('Participant', 'get', [
+        'sequential' => 1,
+        'return' => ["custom_{$fieldId}", 'participant_status_id'],
+        "custom_{$fieldId}" => ['IS NOT NULL' => 1],
         'event_id' => $eventId,
         'api.ParticipantStatusType.get' => [
           'id' => '$value.participant_status_id',
           'is_counted' => 1,
         ],
-      ],
-    ]);
+        'options' => [
+          'limit' => 0,
+        ],
+      ]);
 
-    // If there is a $priceFieldParticipant, foreach for the details
-    if ($priceFieldParticipant) {
-      foreach ($priceFieldParticipant['values'] as $participantDetails) {
-        // If participantStatusType has a data, it is a counted status
-        if ($participantDetails['api.Participant.get']['values'][0]['api.ParticipantStatusType.get']['count']) {
-          $values[] = $participantDetails['price_field_value_id'];
+      // If there is a $participants, foreach for the details
+      if ($participants) {
+        foreach ($participants['values'] as $participantDetails) {
+          // If participantStatusType has a data, it is a counted status and store it on getCustomValues
+          if ($participantDetails['api.ParticipantStatusType.get']['count']) {
+            $values[] = $participantDetails["custom_{$fieldId}"];
+          }
+        }
+      }
+    }
+    else if ($fieldType == 'price') {
+      // Call LineItem api using price_field_id as $fieldId
+      // with Participant.get api called using $value.entity_id and event_id
+      // lastly with participantStatusType.get api
+      $priceFieldParticipant = civicrm_api3('LineItem', 'get', [
+        'sequential' => 1,
+        'return' => ['price_field_value_id', 'entity_id'],
+        'price_field_id' => $fieldId,
+        'api.Participant.get' => [
+          'return' => ['participant_status_id'],
+          'id' => '$value.entity_id',
+          'event_id' => $eventId,
+          'api.ParticipantStatusType.get' => [
+            'id' => '$value.participant_status_id',
+            'is_counted' => 1,
+          ],
+        ],
+      ]);
+
+      // If there is a $priceFieldParticipant, foreach for the details
+      if ($priceFieldParticipant) {
+        foreach ($priceFieldParticipant['values'] as $participantDetails) {
+          // If participantStatusType has a data, it is a counted status
+          if ($participantDetails['api.Participant.get']['values'][0]['api.ParticipantStatusType.get']['count']) {
+            $values[] = $participantDetails['price_field_value_id'];
+          }
         }
       }
     }
