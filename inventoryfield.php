@@ -288,7 +288,7 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
       if ($inventoryfield['limit_per']) {
         $customFieldId = $inventoryfield['custom_field_id'];
         // Get participant details using custom field id
-        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $form->getVar('_id'), $inventoryfield['limit_per_amount']);
+        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $form->getVar('_eventId'), $inventoryfield['limit_per_amount']);
         $customFieldName = "custom_{$customFieldId}";
         $customFieldValue = $fields[$customFieldName];
 
