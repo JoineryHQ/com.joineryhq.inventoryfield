@@ -253,15 +253,15 @@ function inventoryfield_civicrm_buildForm($formName, &$form) {
       if ($inventoryfield['limit_per'] && $form->elementExists($customFieldName)) {
         // Get participant details using custom field id
         $eventId = ($form->getVar('_id') ?? $form->getVar('_eventId'));
-        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId, $inventoryfield['limit_per_amount']);
+        $consumedOptionValues = _inventoryfield_getFieldConsumedOptionsPerEvent($customFieldId, $eventId, $inventoryfield['limit_per_amount']);
         // Get custom field details
         $elField = $form->getElement($customFieldName);
         $elFieldOptions = & $elField->_options;
 
         // Foreach custom field option values
         foreach ($elFieldOptions as $elFieldOptionKey => $elFieldOption) {
-          // If value exist in $fieldUsedOptionsPerEvent array, edit to disable
-          if (!empty($fieldUsedOptionsPerEvent[$elFieldOption['attr']['value']])) {
+          // If value exist in $consumedOptionValues array, modify this option to disable it.
+          if (in_array($elFieldOption['attr']['value'], $consumedOptionValues)) {
             $elFieldOptions[$elFieldOptionKey]['text'] = $elFieldOption['text'] . E::ts(' (unavailable)');
             $elFieldOptions[$elFieldOptionKey]['attr']['disabled'] = TRUE;
           }
@@ -288,16 +288,16 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
       if ($inventoryfield['limit_per']) {
         $customFieldId = $inventoryfield['custom_field_id'];
         // Get participant details using custom field id
-        $fieldUsedOptionsPerEvent = _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $form->getVar('_eventId'), $inventoryfield['limit_per_amount']);
+        $consumedOptionValues = _inventoryfield_getFieldConsumedOptionsPerEvent($customFieldId, $form->getVar('_eventId'), $inventoryfield['limit_per_amount']);
         $customFieldName = "custom_{$customFieldId}";
         $customFieldValue = $fields[$customFieldName];
 
         // If value exist in $fieldUsedOptionsPerEvent array, return and error
-        if (!empty($fieldUsedOptionsPerEvent[$customFieldValue])) {
+        if (in_array($customFieldValue, $consumedOptionValues)) {
           // Get custom field details for the label in error
           $elField = $form->getElement($customFieldName);
           // Add error
-          $errors[$customFieldName] = E::ts("{$elField->_label}: Your selection was just taken by someone else.");
+          $errors[$customFieldName] = E::ts("Your selection was just taken by someone else.");
           return;
         }
       }
@@ -320,18 +320,22 @@ function inventoryfield_civicrm_validateForm($formName, &$fields, &$files, &$for
 }
 
 /**
- * Get participant details using customfield id and event id
+ * For a given custom field (which should be a select list of options), get a list
+ * of the options which have met or exceeded the configured "limit usage count"
+ * among "is_counted" participants in a given event.
  *
  * @param $customFieldId int
  * @param $eventId int
- * @param $limitPerAmount int
+ * @param $limitPerAmount int Default to 1, which used to be the assumed value
+ *  before this was a configurable setting per-field (and pre-existing sites may
+ *  still have NULL for this setting on some fields.)
  *
- * @return array of custom participant details
+ * @return array of select-option values which have met usage limit.
  */
-function _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId, $limitPerAmount) {
+function _inventoryfield_getFieldConsumedOptionsPerEvent($customFieldId, $eventId, $limitPerAmount = 1) {
   // Call Participant api using custom_X (X as $customFieldId) and event_id
   // with participantStatusType.get api
-  $participants = civicrm_api3('Participant', 'get', [
+  $participantGet = civicrm_api3('Participant', 'get', [
     'sequential' => 1,
     'return' => ["custom_{$customFieldId}", 'participant_status_id'],
     "custom_{$customFieldId}" => ['IS NOT NULL' => 1],
@@ -346,29 +350,26 @@ function _inventoryfield_getFieldUsedOptionsPerEvent($customFieldId, $eventId, $
   ]);
 
   // Initialize details variable as array
-  $details = [];
-  // If there is a $participants, foreach for the details
-  if ($participants) {
-    $getCustomValues = [];
-    foreach ($participants['values'] as $participantDetails) {
-      // If participantStatusType has a data, it is a counted status and store it on getCustomValues
-      if ($participantDetails['api.ParticipantStatusType.get']['count']) {
-        $getCustomValues[] = $participantDetails["custom_{$customFieldId}"];
-      }
-    }
-
-    // Count all values of getCustomValues
-    $countCustomValues = array_count_values($getCustomValues);
-    foreach ($countCustomValues as $customValue => $customValueCount) {
-      // If customValueCount greater thatn or equals to limitPerAmount..
-      // it needs to be removed
-      if ($customValueCount >= $limitPerAmount) {
-        $details[$customValue] = $customValue;
-      }
+  $consumedOptionValues = [];
+  $customFieldValues = [];
+  foreach ($participantGet['values'] as $participant) {
+    // If participantStatusType has a data, it is a counted status, so add it to $customFieldValues.
+    if ($participant['api.ParticipantStatusType.get']['count']) {
+      $customFieldValues[] = $participant["custom_{$customFieldId}"];
     }
   }
 
-  return $details;
+  // Count usage for all distinct custom field values.
+  $usagePerCustomFieldValue = array_count_values($customFieldValues);
+  foreach ($usagePerCustomFieldValue as $customFieldValue => $customFieldValueCount) {
+    // If customValueCount greater thatn or equals to limitPerAmount..
+    // it needs to be blocked from further usage.
+    if ($customFieldValueCount >= $limitPerAmount) {
+      $consumedOptionValues[] = $customFieldValue;
+    }
+  }
+
+  return $consumedOptionValues;
 }
 
 /**
