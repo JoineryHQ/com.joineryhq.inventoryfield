@@ -354,7 +354,7 @@ function _inventoryfield_getFieldConsumedOptionsPerEvent($customFieldId, $eventI
   $customFieldValues = [];
   foreach ($participantGet['values'] as $participant) {
     // If participantStatusType has a data, it is a counted status, so add it to $customFieldValues.
-    if ($participant['api.ParticipantStatusType.get']['count']) {
+    if ($participant['api.ParticipantStatusType.get']['count'] && $participant["custom_{$customFieldId}"]) {
       $customFieldValues[] = $participant["custom_{$customFieldId}"];
     }
   }
